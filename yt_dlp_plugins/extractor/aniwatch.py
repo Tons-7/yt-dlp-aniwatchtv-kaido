@@ -52,6 +52,7 @@ class AniWatchIE(InfoExtractor):
             'English Subbed': 'en',
             'French - Francais(France)': 'fr',
             'German - Deutsch': 'de',
+            'Indonesian': 'id',
             'Italian - Italiano': 'it',
             'Portuguese - Portugues(Brasil)': 'pt',
             'Russian': 'ru',
