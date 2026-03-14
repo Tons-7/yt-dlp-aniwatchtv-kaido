@@ -48,8 +48,11 @@ yt-dlp "https://aniwatchtv.to/watch/one-piece-100?ep=2142"
 Controls the language of the `series` metadata field. Useful for file naming or player titles.
 
 Value -> Language
+
 `en` -> English (default)
+
 `jp-romaji` -> Romanized Japanese
+
 `jp` -> Japanese kanji/kana
 
 ```
