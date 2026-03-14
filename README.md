@@ -41,6 +41,21 @@ yt-dlp "https://aniwatchtv.to/watch/one-piece-100?ep=2142"
 
 ---
 
+## Extractor Arguments
+
+### `title_lang` — Anime title language
+
+Controls the language of the `series` metadata field. Useful for file naming or player titles.
+
+Value -> Language
+`en` -> English (default)
+`jp-romaji` -> Romanized Japanese
+`jp` -> Japanese kanji/kana
+
+```
+yt-dlp --extractor-args "aniwatch:title_lang=jp-romaji" "https://aniwatchtv.to/watch/one-piece-100?ep=2142"
+```
+
 ## Requirements
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) latest
