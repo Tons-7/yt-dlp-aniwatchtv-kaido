@@ -10,6 +10,7 @@ from yt_dlp.extractor.common import InfoExtractor
 from yt_dlp.utils import ExtractorError, clean_html, get_element_by_class
 from megacloud import Megacloud
 
+
 class AniWatchIE(InfoExtractor):
     _VALID_URL = r'https?://aniwatchtv\.to/(?:watch/)?(?P<slug>[^/?]+)(?:-\d+)?-(?P<playlist_id>\d+)(?:\?ep=(?P<episode_id>\d+))?$'
 
@@ -145,7 +146,7 @@ class AniWatchIE(InfoExtractor):
                     re.search(r'data-id="([^"]+)"', s.group(0)).group(1)
                     for s in server_items_filtered
                     if re.search(rf'>\s*{re.escape(target_link_text)}\s*</a>', s.group(0))
-                    and re.search(r'data-id="([^"]+)"', s.group(0))
+                       and re.search(r'data-id="([^"]+)"', s.group(0))
                 ),
                 None
             )
@@ -153,7 +154,8 @@ class AniWatchIE(InfoExtractor):
                 continue
 
             sources_url = f'{self.base_url}/ajax/v2/episode/sources?id={server_id}'
-            sources_data = self._download_json(sources_url, episode_id, note=f'Getting {server_type.upper()} Episode Information')
+            sources_data = self._download_json(sources_url, episode_id,
+                                               note=f'Getting {server_type.upper()} Episode Information')
             embed_url = sources_data.get('link')
             if not embed_url:
                 continue
@@ -239,12 +241,34 @@ class AniWatchIE(InfoExtractor):
     def _get_anime_title(self, slug, playlist_id):
         if self.anime_title:
             return self.anime_title
+
         webpage = self._download_webpage(
             f'{self.base_url}/{slug}-{playlist_id}',
             playlist_id,
             note='Fetching Anime Title'
         )
-        self.anime_title = get_element_by_class('film-name dynamic-name', webpage)
+
+        title_lang = self._configuration_arg('title_lang', default=['en'])[0]
+
+        if title_lang == 'jp-romaji':
+            # data-jname on the <h2 class="film-name dynamic-name"> element
+            match = re.search(r'<h2[^>]*film-name[^>]*data-jname="([^"]+)"', webpage)
+            if not match:
+                match = re.search(r'data-jname="([^"]+)"[^>]*class="[^"]*film-name', webpage)
+            self.anime_title = match.group(1) if match else get_element_by_class('film-name dynamic-name', webpage)
+
+        elif title_lang == 'jp':
+            # <span class="item-head">Japanese:</span> <span class="name">anime_japanese_name</span>
+            match = re.search(
+                r'<span[^>]*class="item-head">Japanese:</span>\s*<span[^>]*class="name">([^<]+)</span>',
+                webpage
+            )
+            self.anime_title = match.group(1).strip() if match else get_element_by_class('film-name dynamic-name',
+                                                                                         webpage)
+
+        else:  # 'en' (default)
+            self.anime_title = get_element_by_class('film-name dynamic-name', webpage)
+
         return self.anime_title
 
     def _get_elements_by_tag_and_attrib(self, html, tag=None, attribute=None, value=None, escape_value=True):
