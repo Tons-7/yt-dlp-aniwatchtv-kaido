@@ -1,4 +1,4 @@
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 import sys
 import os
@@ -6,6 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import re
+import time
 from yt_dlp.extractor.common import InfoExtractor
 from yt_dlp.utils import ExtractorError, clean_html, get_element_by_class
 from megacloud import Megacloud
@@ -134,74 +135,87 @@ class AniWatchIE(InfoExtractor):
         intro = None
         outro = None
 
+        mirror_names = ['MegaCloud', 'VidSrc', 'HD-1', 'HD-2', 'HD-3']
+
         for server_type in ['sub', 'dub', 'raw']:
             server_items_from_func = self._get_elements_by_tag_and_attrib(
                 servers_data['html'], tag='div', attribute='data-type', value=server_type, escape_value=False
             )
             server_items_filtered = [s for s in server_items_from_func if f'data-type="{server_type}"' in s.group(0)]
 
-            target_link_text = "MegaCloud"
-            server_id = next(
-                (
-                    re.search(r'data-id="([^"]+)"', s.group(0)).group(1)
-                    for s in server_items_filtered
-                    if re.search(rf'>\s*{re.escape(target_link_text)}\s*</a>', s.group(0))
-                       and re.search(r'data-id="([^"]+)"', s.group(0))
-                ),
-                None
-            )
-            if not server_id:
-                continue
-
-            sources_url = f'{self.base_url}/ajax/v2/episode/sources?id={server_id}'
-            sources_data = self._download_json(sources_url, episode_id,
-                                               note=f'Getting {server_type.upper()} Episode Information')
-            embed_url = sources_data.get('link')
-            if not embed_url:
-                continue
-
-            scraper = Megacloud(embed_url)
-            data = scraper.extract()
-
-            if intro is None:
-                raw_intro = data.get('intro')
-                if raw_intro and raw_intro[1] > raw_intro[0]:
-                    intro = raw_intro
-            if outro is None:
-                raw_outro = data.get('outro')
-                if raw_outro and raw_outro[1] > raw_outro[0]:
-                    outro = raw_outro
-
-            for source in data.get('sources', []):
-                file_url = source.get('file')
-                if not (file_url and file_url.endswith('.m3u8')):
-                    continue
-
-                extracted_formats = self._extract_custom_m3u8_formats(
-                    file_url,
-                    episode_id,
-                    headers={"Referer": "https://megacloud.blog/"},
-                    server_type=server_type
+            for mirror in mirror_names:
+                server_id = next(
+                    (
+                        re.search(r'data-id="([^"]+)"', s.group(0)).group(1)
+                        for s in server_items_filtered
+                        if re.search(rf'>\s*{re.escape(mirror)}\s*</a>', s.group(0))
+                           and re.search(r'data-id="([^"]+)"', s.group(0))
+                    ),
+                    None
                 )
-                formats.extend(extracted_formats)
-
-            for track in data.get('tracks', []):
-                if track.get('kind') != 'captions':
+                if not server_id:
                     continue
 
-                file_url = track.get('file')
-                label = track.get('label')
+                try:
+                    sources_url = f'{self.base_url}/ajax/v2/episode/sources?id={server_id}'
+                    sources_data = self._download_json(
+                        sources_url, episode_id,
+                        note=f'Getting {server_type.upper()} Episode Information from {mirror}'
+                    )
+                    embed_url = sources_data.get('link')
+                    if not embed_url:
+                        continue
 
-                if label == 'English':
-                    label += f' {server_type.capitalize()}bed'
+                    scraper = Megacloud(embed_url)
+                    data = scraper.extract()
 
-                lang_code = self.language_codes.get(label, label)
+                    if not data.get('sources'):
+                        continue
 
-                if file_url:
-                    subtitles.setdefault(lang_code, []).append({
-                        'name': label,
-                        'url': file_url,
-                    })
+                    if intro is None:
+                        raw_intro = data.get('intro')
+                        if raw_intro and raw_intro[1] > raw_intro[0]:
+                            intro = raw_intro
+                    if outro is None:
+                        raw_outro = data.get('outro')
+                        if raw_outro and raw_outro[1] > raw_outro[0]:
+                            outro = raw_outro
+
+                    for source in data.get('sources', []):
+                        file_url = source.get('file')
+                        if not (file_url and file_url.endswith('.m3u8')):
+                            continue
+                        extracted_formats = self._extract_custom_m3u8_formats(
+                            file_url,
+                            episode_id,
+                            headers={"Referer": "https://megacloud.blog/"},
+                            server_type=server_type
+                        )
+                        formats.extend(extracted_formats)
+
+                    for track in data.get('tracks', []):
+                        if track.get('kind') != 'captions':
+                            continue
+                        file_url = track.get('file')
+                        label = track.get('label')
+                        if label == 'English':
+                            label += f' {server_type.capitalize()}bed'
+                        lang_code = self.language_codes.get(label, label)
+                        if file_url:
+                            subtitles.setdefault(lang_code, []).append({
+                                'name': label,
+                                'url': file_url,
+                            })
+
+                    break
+
+                except Exception as e:
+                    self.to_screen(
+                        f'Failed to extract from {mirror} for {server_type}: {e}, '
+                        f'trying next mirror after 10 seconds'
+                    )
+                    time.sleep(10)
+                    continue
 
         return {
             'id': episode_id,
