@@ -188,7 +188,7 @@ class AniWatchIE(InfoExtractor):
                         extracted_formats = self._extract_custom_m3u8_formats(
                             file_url,
                             episode_id,
-                            headers={"Referer": "https://megacloud.blog/"},
+                            headers={"Referer": "https://megacloud.blog/"} if mirror == "MegaCloud" else {},
                             server_type=server_type,
                             mirror=mirror
                         )
@@ -242,9 +242,6 @@ class AniWatchIE(InfoExtractor):
         return chapters or None
 
     def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None, mirror=None):
-        if mirror != "MegaCloud":
-            headers = {}
-        
         formats = self._extract_m3u8_formats(
             m3u8_url, episode_id, 'mp4', entry_protocol='m3u8_native',
             note='Downloading M3U8 Information', headers=headers
