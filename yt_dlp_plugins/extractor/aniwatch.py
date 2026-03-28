@@ -188,8 +188,9 @@ class AniWatchIE(InfoExtractor):
                         extracted_formats = self._extract_custom_m3u8_formats(
                             file_url,
                             episode_id,
-                            headers={"Referer": "https://megacloud.blog/"},
-                            server_type=server_type
+                            headers={"Referer": "https://megacloud.blog/"} if mirror == "MegaCloud" else {},
+                            server_type=server_type,
+                            mirror=mirror
                         )
                         formats.extend(extracted_formats)
 
@@ -240,7 +241,7 @@ class AniWatchIE(InfoExtractor):
             chapters.append({'title': 'outro', 'start_time': outro[0], 'end_time': outro[1]})
         return chapters or None
 
-    def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None):
+    def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None, mirror=None):
         formats = self._extract_m3u8_formats(
             m3u8_url, episode_id, 'mp4', entry_protocol='m3u8_native',
             note='Downloading M3U8 Information', headers=headers
@@ -249,7 +250,8 @@ class AniWatchIE(InfoExtractor):
             height = f.get('height')
             f['format_id'] = f'{server_type}_{height}p'
             f['language'] = self.language[server_type]
-            f['http_headers'] = headers
+            if headers:
+                f['http_headers'] = headers
         return formats
 
     def _get_anime_title(self, slug, playlist_id):
