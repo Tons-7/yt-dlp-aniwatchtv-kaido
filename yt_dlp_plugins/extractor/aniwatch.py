@@ -97,13 +97,17 @@ class AniWatchIE(InfoExtractor):
             ep_id = data_id.group(1) if data_id else None
             ep_title = clean_html(title.group(1)) if title else None
             ep_number = int(number.group(1)) if number else None
-            ep_url = f'{self.base_url}{href.group(1)}' if href else None
+            ep_href = href.group(1) if href else None
+            ep_url = f'{self.base_url}{ep_href}' if ep_href and ep_href.startswith('/') else None
 
             self.episode_list[ep_id] = {
                 'title': ep_title,
                 'number': ep_number,
                 'url': ep_url,
             }
+
+            if not ep_url:
+                continue
 
             entries.append(self.url_result(
                 ep_url,
