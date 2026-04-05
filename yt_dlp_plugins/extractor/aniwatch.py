@@ -98,8 +98,14 @@ class AniWatchIE(InfoExtractor):
             ep_title = clean_html(title.group(1)) if title else None
             ep_number = int(number.group(1)) if number else None
             ep_href = href.group(1) if href else None
-            ep_url = f'{self.base_url}{ep_href}' if ep_href and ep_href.startswith('/') else None
 
+            if ep_href and ep_href.startswith('/'):
+                ep_url = f'{self.base_url}{ep_href}'
+            elif ep_id:
+                ep_url = f'{self.base_url}/watch/{slug}-{playlist_id}?ep={ep_id}'
+            else:
+                ep_url = None
+            
             self.episode_list[ep_id] = {
                 'title': ep_title,
                 'number': ep_number,
