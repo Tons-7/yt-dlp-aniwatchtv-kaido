@@ -21,11 +21,12 @@ pip install -U https://github.com/Tons-7/yt-dlp-aniwatchtv/archive/master.zip
    ```
    %APPDATA%\yt-dlp\plugins\aniwatch\yt_dlp_plugins\extractor\
    ```
-3. Copy `aniwatch.py` and `megacloud.py` into that folder
+3. Copy `aniwatch.py`, `kaido.py`, and `megacloud.py` into that folder
 
 The final structure should look like:
 ```
 %APPDATA%\yt-dlp\plugins\aniwatch\yt_dlp_plugins\extractor\aniwatch.py
+%APPDATA%\yt-dlp\plugins\aniwatch\yt_dlp_plugins\extractor\kaido.py
 %APPDATA%\yt-dlp\plugins\aniwatch\yt_dlp_plugins\extractor\megacloud.py
 ```
 
@@ -33,7 +34,7 @@ The final structure should look like:
 
 ## Usage
 
-Once installed, yt-dlp will automatically use this plugin for any `aniwatchtv.to` URL — no extra flags needed:
+Once installed, yt-dlp will automatically use this plugin for any `aniwatchtv.to` or `kaido.to` URL — no extra flags needed:
 
 ```
 yt-dlp "https://aniwatchtv.to/watch/one-piece-100?ep=2142"
