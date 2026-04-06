@@ -1,6 +1,6 @@
-# yt-dlp-aniwatchtv
+# yt-dlp-aniwatchtv-kaido
 
-A [yt-dlp](https://github.com/yt-dlp/yt-dlp) extractor plugin for [aniwatchtv.to](https://aniwatchtv.to).
+A [yt-dlp](https://github.com/yt-dlp/yt-dlp) extractor plugin for [aniwatchtv.to](https://aniwatchtv.to) and [kaido.to](https://kaido.to).
 
 Based on [yt-dlp-hianime](https://github.com/pratikpatel8982/yt-dlp-hianime) by pratikpatel8982.
 
