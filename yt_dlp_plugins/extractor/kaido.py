@@ -1,0 +1,316 @@
+__version__ = "3.1.0"
+
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import re
+import time
+from yt_dlp.extractor.common import InfoExtractor
+from yt_dlp.utils import ExtractorError, clean_html, get_element_by_class
+from megacloud import Megacloud
+
+
+class AniWatchIE(InfoExtractor):
+    _VALID_URL = r'https?://kaido\.to/(?:watch/)?(?P<slug>[^/?]+)(?:-\d+)?-(?P<playlist_id>\d+)(?:\?ep=(?P<episode_id>\d+))?$'
+
+    _TESTS = [
+        {
+            'url': 'https://kaido.to/demon-slayer-kimetsu-no-yaiba-hashira-training-arc-19107',
+            'info_dict': {
+                'id': '19107',
+                'title': 'Demon Slayer: Kimetsu no Yaiba Hashira Training Arc',
+            },
+            'playlist_count': 8,
+        },
+        {
+            'url': 'https://kaido.to/watch/demon-slayer-kimetsu-no-yaiba-hashira-training-arc-19107?ep=124260',
+            'info_dict': {
+                'id': '124260',
+                'title': 'To Defeat Muzan Kibutsuji',
+                'ext': 'mp4',
+                'series': 'Demon Slayer: Kimetsu no Yaiba Hashira Training Arc',
+                'series_id': '19107',
+                'episode': 'To Defeat Muzan Kibutsuji',
+                'episode_number': 1,
+                'episode_id': '124260',
+            },
+        },
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.anime_title = None
+        self.episode_list = {}
+        self.language = {
+            'sub': 'ja',
+            'dub': 'en',
+            'raw': 'ja'
+        }
+        self.language_codes = {
+            'Arabic': 'ar',
+            'English Dubbed': 'en-IN',
+            'English Subbed': 'en',
+            'French - Francais(France)': 'fr',
+            'German - Deutsch': 'de',
+            'Indonesian': 'id',
+            'Italian - Italiano': 'it',
+            'Portuguese - Portugues(Brasil)': 'pt',
+            'Russian': 'ru',
+            'Spanish - Espanol': 'es',
+            'Spanish - Espanol(Espana)': 'es',
+        }
+
+    def _real_extract(self, url):
+        mobj = self._match_valid_url(url)
+        playlist_id = mobj.group('playlist_id')
+        episode_id = mobj.group('episode_id')
+        slug = mobj.group('slug')
+        self.base_url = re.match(r'https?://[^/]+', url).group(0)
+
+        if episode_id:
+            return self._extract_episode(slug, playlist_id, episode_id)
+        elif playlist_id:
+            return self._extract_playlist(slug, playlist_id)
+        else:
+            raise ExtractorError('Unsupported URL format')
+
+    # ========== Playlist Extraction ========== #
+
+    def _extract_playlist(self, slug, playlist_id):
+        anime_title = self._get_anime_title(slug, playlist_id)
+        playlist_url = f'{self.base_url}/ajax/episode/list/{playlist_id}'
+        playlist_data = self._download_json(playlist_url, playlist_id, note='Fetching Episode List')
+        episodes = self._get_elements_by_tag_and_attrib(
+            playlist_data['html'], tag='a', attribute='class', value='ep-item'
+        )
+
+        entries = []
+        for episode in episodes:
+            html = episode.group(0)
+            title = re.search(r'title="([^"]+)"', html)
+            number = re.search(r'data-number="([^"]+)"', html)
+            data_id = re.search(r'data-id="([^"]+)"', html)
+            href = re.search(r'href="([^"]+)"', html)
+
+            ep_id = data_id.group(1) if data_id else None
+            ep_title = clean_html(title.group(1)) if title else None
+            ep_number = int(number.group(1)) if number else None
+            ep_href = href.group(1) if href else None
+            if ep_href and ep_href.startswith('/'):
+                ep_url = f'{self.base_url}{ep_href}'
+            elif ep_id:
+                ep_url = f'{self.base_url}/watch/{slug}-{playlist_id}?ep={ep_id}'
+            else:
+                ep_url = None
+
+            self.episode_list[ep_id] = {
+                'title': ep_title,
+                'number': ep_number,
+                'url': ep_url,
+            }
+
+            if not ep_url:
+                continue
+
+            entries.append(self.url_result(
+                ep_url,
+                ie=self.ie_key(),
+                video_id=ep_id,
+                video_title=ep_title,
+            ))
+
+        return self.playlist_result(entries, playlist_id, anime_title)
+
+    # ========== Episode Extraction ========== #
+
+    def _extract_episode(self, slug, playlist_id, episode_id):
+        anime_title = self._get_anime_title(slug, playlist_id)
+
+        if episode_id not in self.episode_list:
+            self._extract_playlist(slug, playlist_id)
+
+        episode_data = self.episode_list.get(episode_id)
+
+        if not episode_data:
+            raise ExtractorError(f'Episode data for episode_id {episode_id} not found')
+
+        servers_url = f'{self.base_url}/ajax/episode/servers?episodeId={episode_id}'
+        servers_data = self._download_json(servers_url, episode_id, note='Fetching Server IDs')
+
+        formats = []
+        subtitles = {}
+        intro = None
+        outro = None
+
+        mirror_names = ['Vidstreaming', 'Vidcloud']
+
+        for server_type in ['sub', 'dub', 'raw']:
+            server_items_from_func = self._get_elements_by_tag_and_attrib(
+                servers_data['html'], tag='div', attribute='data-type', value=server_type, escape_value=False
+            )
+            server_items_filtered = [s for s in server_items_from_func if f'data-type="{server_type}"' in s.group(0)]
+
+            for mirror in mirror_names:
+                server_id = next(
+                    (
+                        re.search(r'data-id="([^"]+)"', s.group(0)).group(1)
+                        for s in server_items_filtered
+                        if re.search(rf'>\s*{re.escape(mirror)}\s*</a>', s.group(0))
+                           and re.search(r'data-id="([^"]+)"', s.group(0))
+                    ),
+                    None
+                )
+                if not server_id:
+                    continue
+
+                try:
+                    sources_url = f'{self.base_url}/ajax/episode/sources?id={server_id}'
+                    sources_data = self._download_json(
+                        sources_url, episode_id,
+                        note=f'Getting {server_type.upper()} Episode Information from {mirror}'
+                    )
+                    embed_url = sources_data.get('link')
+                    if not embed_url:
+                        continue
+
+                    scraper = Megacloud(embed_url)
+                    data = scraper.extract()
+
+                    if not data.get('sources'):
+                        continue
+
+                    if intro is None:
+                        raw_intro = data.get('intro')
+                        if raw_intro and raw_intro[1] > raw_intro[0]:
+                            intro = raw_intro
+                    if outro is None:
+                        raw_outro = data.get('outro')
+                        if raw_outro and raw_outro[1] > raw_outro[0]:
+                            outro = raw_outro
+
+                    for source in data.get('sources', []):
+                        file_url = source.get('file')
+                        if not (file_url and file_url.endswith('.m3u8')):
+                            continue
+                        embed_referer = re.match(r'https?://[^/]+', embed_url).group(0) + '/'
+                        extracted_formats = self._extract_custom_m3u8_formats(
+                            file_url,
+                            episode_id,
+                            headers={"Referer": embed_referer},
+                            server_type=server_type,
+                            mirror=mirror
+                        )
+                        formats.extend(extracted_formats)
+
+                    for track in data.get('tracks', []):
+                        if track.get('kind') != 'captions':
+                            continue
+                        file_url = track.get('file')
+                        label = track.get('label')
+                        if label == 'English':
+                            label += f' {server_type.capitalize()}bed'
+                        lang_code = self.language_codes.get(label, label)
+                        if file_url:
+                            subtitles.setdefault(lang_code, []).append({
+                                'name': label,
+                                'url': file_url,
+                            })
+
+                    break
+
+                except Exception as e:
+                    self.to_screen(
+                        f'Failed to extract from {mirror} for {server_type}: {e}, '
+                        f'trying next mirror after 10 seconds'
+                    )
+                    time.sleep(10)
+                    continue
+
+        return {
+            'id': episode_id,
+            'title': episode_data['title'],
+            'formats': formats,
+            'subtitles': subtitles,
+            'series': anime_title,
+            'series_id': playlist_id,
+            'episode': episode_data['title'],
+            'episode_number': episode_data['number'],
+            'episode_id': episode_id,
+            'chapters': self._build_chapters(intro, outro),
+        }
+
+    # ========== Helpers ========== #
+
+    def _build_chapters(self, intro, outro):
+        chapters = []
+        if intro:
+            chapters.append({'title': 'intro', 'start_time': intro[0], 'end_time': intro[1]})
+        if outro:
+            chapters.append({'title': 'outro', 'start_time': outro[0], 'end_time': outro[1]})
+        return chapters or None
+
+    def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None, mirror=None):
+        formats = self._extract_m3u8_formats(
+            m3u8_url, episode_id, 'mp4', entry_protocol='m3u8_native',
+            note='Downloading M3U8 Information', headers=headers
+        )
+        for f in formats:
+            height = f.get('height')
+            f['format_id'] = f'{server_type}_{height}p'
+            f['language'] = self.language[server_type]
+            if headers:
+                f['http_headers'] = headers
+        return formats
+
+    def _get_anime_title(self, slug, playlist_id):
+        if self.anime_title:
+            return self.anime_title
+
+        webpage = self._download_webpage(
+            f'{self.base_url}/{slug}-{playlist_id}',
+            playlist_id,
+            note='Fetching Anime Title'
+        )
+
+        title_lang = self._configuration_arg('title_lang', default=['en'])[0]
+
+        if title_lang == 'jp-romaji':
+            # data-jname on the <h2 class="film-name dynamic-name"> element
+            match = re.search(r'<h2[^>]*film-name[^>]*data-jname="([^"]+)"', webpage)
+            if not match:
+                match = re.search(r'data-jname="([^"]+)"[^>]*class="[^"]*film-name', webpage)
+            self.anime_title = match.group(1) if match else get_element_by_class('film-name dynamic-name', webpage)
+
+        elif title_lang == 'jp':
+            # <span class="item-head">Japanese:</span> <span class="name">anime_japanese_name</span>
+            match = re.search(
+                r'<span[^>]*class="item-head">Japanese:</span>\s*<span[^>]*class="name">([^<]+)</span>',
+                webpage
+            )
+            self.anime_title = match.group(1).strip() if match else get_element_by_class('film-name dynamic-name',
+                                                                                         webpage)
+
+        else:  # 'en' (default)
+            self.anime_title = get_element_by_class('film-name dynamic-name', webpage)
+
+        return self.anime_title
+
+    def _get_elements_by_tag_and_attrib(self, html, tag=None, attribute=None, value=None, escape_value=True):
+        tag = tag or r'[a-zA-Z0-9:._-]+'
+        if attribute:
+            attribute = rf'\s+{re.escape(attribute)}'
+        if value:
+            value = re.escape(value) if escape_value else value
+            value = f'=[\'"]?(?P<value>.*?{value}.*?)[\'"]?'
+
+        return list(re.finditer(rf'''(?xs)
+            <{tag}
+            (?:\s+[a-zA-Z0-9:._-]+(?:=[a-zA-Z0-9:._-]*|="[^"]*"|='[^']*'|))*?
+            {attribute}{value}
+            (?:\s+[a-zA-Z0-9:._-]+(?:=[a-zA-Z0-9:._-]*|="[^"]*"|='[^']*'|))*?
+            \s*>
+            (?P<content>.*?)
+            </{tag}>
+        ''', html))
