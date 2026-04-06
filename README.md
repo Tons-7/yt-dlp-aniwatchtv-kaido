@@ -19,7 +19,7 @@ pip install -U https://github.com/Tons-7/yt-dlp-aniwatchtv-kaido/archive/master.
 1. Download this repo as a ZIP and extract it
 2. Create this folder if it doesn't exist:
    ```
-   %APPDATA%\yt-dlp\plugins\aniwatch\yt_dlp_plugins\extractor\
+   %APPDATA%\yt-dlp\plugins\aniwatch-kaido\yt_dlp_plugins\extractor\
    ```
 3. Copy `aniwatch.py`, `kaido.py`, and `megacloud.py` into that folder
 
