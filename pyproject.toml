@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 universal = true
 
 [project]
-name = "yt-dlp-aniwatchtv"
-version = "3.0.1"
+name = "yt-dlp-aniwatchtv-kaido"
+version = "3.1.0"
 dependencies = [
     "requests>=2.32.4"
 ]
