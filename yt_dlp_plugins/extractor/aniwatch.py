@@ -1,4 +1,4 @@
-__version__ = "3.0.1"
+__version__ = "1.0.0"
 
 import sys
 import os
@@ -12,7 +12,7 @@ from yt_dlp.utils import ExtractorError, clean_html, get_element_by_class
 from megacloud import Megacloud
 
 
-class AniWatchIE(InfoExtractor):
+class AniWatchTVIE(InfoExtractor):
     _VALID_URL = r'https?://aniwatchtv\.to/(?:watch/)?(?P<slug>[^/?]+)(?:-\d+)?-(?P<playlist_id>\d+)(?:\?ep=(?P<episode_id>\d+))?$'
 
     _TESTS = [
@@ -38,6 +38,8 @@ class AniWatchIE(InfoExtractor):
             },
         },
     ]
+
+    EMBED_DOMAIN = 'https://megacloud.tv'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -105,7 +107,7 @@ class AniWatchIE(InfoExtractor):
                 ep_url = f'{self.base_url}/watch/{slug}-{playlist_id}?ep={ep_id}'
             else:
                 ep_url = None
-            
+
             self.episode_list[ep_id] = {
                 'title': ep_title,
                 'number': ep_number,
@@ -145,7 +147,7 @@ class AniWatchIE(InfoExtractor):
         intro = None
         outro = None
 
-        mirror_names = ['MegaCloud', 'VidSrc', 'HD-1', 'HD-2', 'HD-3']
+        mirror_names = ['MegaCloud', 'VidSrc', 'T-Cloud']
 
         for server_type in ['sub', 'dub', 'raw']:
             server_items_from_func = self._get_elements_by_tag_and_attrib(
@@ -176,6 +178,9 @@ class AniWatchIE(InfoExtractor):
                     if not embed_url:
                         continue
 
+                    # Swap megacloud.blog → megacloud.tv
+                    embed_url = re.sub(r'https?://megacloud\.blog', self.EMBED_DOMAIN, embed_url)
+
                     scraper = Megacloud(embed_url)
                     data = scraper.extract()
 
@@ -195,12 +200,12 @@ class AniWatchIE(InfoExtractor):
                         file_url = source.get('file')
                         if not (file_url and file_url.endswith('.m3u8')):
                             continue
+                        embed_referer = re.match(r'https?://[^/]+', embed_url).group(0) + '/'
                         extracted_formats = self._extract_custom_m3u8_formats(
                             file_url,
                             episode_id,
-                            headers={"Referer": "https://megacloud.blog/"} if mirror == "MegaCloud" else {},
+                            headers={"Referer": embed_referer},
                             server_type=server_type,
-                            mirror=mirror
                         )
                         formats.extend(extracted_formats)
 
@@ -251,7 +256,7 @@ class AniWatchIE(InfoExtractor):
             chapters.append({'title': 'outro', 'start_time': outro[0], 'end_time': outro[1]})
         return chapters or None
 
-    def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None, mirror=None):
+    def _extract_custom_m3u8_formats(self, m3u8_url, episode_id, headers, server_type=None):
         formats = self._extract_m3u8_formats(
             m3u8_url, episode_id, 'mp4', entry_protocol='m3u8_native',
             note='Downloading M3U8 Information', headers=headers
@@ -277,14 +282,12 @@ class AniWatchIE(InfoExtractor):
         title_lang = self._configuration_arg('title_lang', default=['en'])[0]
 
         if title_lang == 'jp-romaji':
-            # data-jname on the <h2 class="film-name dynamic-name"> element
             match = re.search(r'<h2[^>]*film-name[^>]*data-jname="([^"]+)"', webpage)
             if not match:
                 match = re.search(r'data-jname="([^"]+)"[^>]*class="[^"]*film-name', webpage)
             self.anime_title = match.group(1) if match else get_element_by_class('film-name dynamic-name', webpage)
 
         elif title_lang == 'jp':
-            # <span class="item-head">Japanese:</span> <span class="name">anime_japanese_name</span>
             match = re.search(
                 r'<span[^>]*class="item-head">Japanese:</span>\s*<span[^>]*class="name">([^<]+)</span>',
                 webpage
