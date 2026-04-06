@@ -11,7 +11,7 @@ Based on [yt-dlp-hianime](https://github.com/pratikpatel8982/yt-dlp-hianime) by 
 ### Option A — pip (Python yt-dlp)
 
 ```
-pip install -U https://github.com/Tons-7/yt-dlp-aniwatchtv/archive/master.zip
+pip install -U https://github.com/Tons-7/yt-dlp-aniwatchtv-kaido/archive/master.zip
 ```
 
 ### Option B — Standalone yt-dlp `.exe` (manual)
