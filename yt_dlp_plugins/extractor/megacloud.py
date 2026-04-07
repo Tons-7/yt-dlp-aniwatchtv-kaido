@@ -471,7 +471,7 @@ class KeyTransform:
         return "".join(result)
 
 class Megacloud:
-    base_url = "https://megacloud.blog"
+    base_url = "https://megacloud.tv"
     headers = {
         "user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0",
         "origin": base_url,
