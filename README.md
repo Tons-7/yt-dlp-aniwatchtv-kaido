@@ -56,8 +56,14 @@ Value -> Language
 
 `jp` -> Japanese kanji/kana
 
+For aniwatchtv.to, use the `aniwatch` key:
 ```
 yt-dlp --extractor-args "aniwatch:title_lang=jp-romaji" "https://aniwatchtv.to/watch/one-piece-100?ep=2142"
+```
+
+For kaido.to, use the `kaido` key:
+```
+yt-dlp --extractor-args "kaido:title_lang=jp-romaji" "https://kaido.to/watch/one-piece-100?ep=2142"
 ```
 
 ## Requirements
